@@ -1,6 +1,16 @@
-# Task Manager
+# Task Manager with PostgreSQL
 
-tasks = []
+require 'pg'
+
+# Conexão com o banco
+conn = PG.connect(
+  dbname: 'taskmanager',
+  user: 'geovana-lemos',
+  password: '91480908',
+  host: 'localhost'
+)
+
+# === Funções ===
 
 def show_menu
   puts "\n=== TASK MANAGER ==="
@@ -12,46 +22,82 @@ def show_menu
   print "Choose an option: "
 end
 
+def add_task(conn)
+  print "Enter task description: "
+  description = gets.chomp
+
+  conn.exec_params(
+    "INSERT INTO tasks (description) VALUES ($1)",
+    [description]
+  )
+
+  puts "Task added."
+end
+
+def list_tasks(conn)
+  result = conn.exec("SELECT * FROM tasks ORDER BY id")
+
+  puts "\n--- TASK LIST ---"
+  if result.ntuples == 0
+    puts "No tasks found."
+  else
+    result.each do |row|
+      status = row["completed"] == "t" ? "[✔]" : "[ ]"
+      puts "#{row['id']}. #{status} #{row['description']}"
+    end
+  end
+end
+
+def complete_task(conn)
+  print "Enter the task ID to mark as completed: "
+  id = gets.chomp.to_i
+
+  result = conn.exec_params(
+    "UPDATE tasks SET completed = true WHERE id = $1",
+    [id]
+  )
+
+  if result.cmd_tuples == 0
+    puts "Task not found."
+  else
+    puts "Task marked as completed."
+  end
+end
+
+def remove_task(conn)
+  print "Enter the task ID to remove: "
+  id = gets.chomp.to_i
+
+  result = conn.exec_params(
+    "DELETE FROM tasks WHERE id = $1",
+    [id]
+  )
+
+  if result.cmd_tuples == 0
+    puts "Task not found."
+  else
+    puts "Task removed."
+  end
+end
+
+# === Loop ===
+
 loop do
   show_menu
   option = gets.chomp.to_i
 
   case option
   when 1
-    print "Enter the task description: "
-    description = gets.chomp
-    tasks << { description: description, completed: false }
-    puts "Task added."
+    add_task(conn)
   when 2
-    puts "\n--- TASK LIST ---"
-    if tasks.empty?
-      puts "No tasks found."
-    else
-      tasks.each_with_index do |task, index|
-        status = task[:completed] ? "[✔]" : "[ ]"
-        puts "#{index + 1}. #{status} #{task[:description]}"
-      end
-    end
+    list_tasks(conn)
   when 3
-    print "Enter the task number to mark as completed: "
-    index = gets.chomp.to_i - 1
-    if tasks[index]
-      tasks[index][:completed] = true
-      puts "Task marked as completed."
-    else
-      puts "Invalid task number."
-    end
+    complete_task(conn)
   when 4
-    print "Enter the task number to remove: "
-    index = gets.chomp.to_i - 1
-    if tasks[index]
-      tasks.delete_at(index)
-      puts "Task removed."
-    else
-      puts "Invalid task number."
-    end
+    remove_task(conn)
   when 5
     puts "Exiting... Bye!"
+    conn.close
     break
   else
     puts "Invalid option. Please try again."
